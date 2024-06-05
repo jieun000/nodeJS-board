@@ -1,0 +1,85 @@
+<div class="container mx-auto p-5 w-9/12">
+  <!-- 페이지 헤더 -->
+  <header class="bg-white shadow">
+    <div class="p-4 mb-5">
+      <h1 class="text-3xl font-bold text-gray-700"><a href="/">{{title}}</a></h1>
+    </div>
+  </header>
+
+  <!-- 검색 및 글쓰기 버튼 영역 -->
+  <div class="flex flex-row mb-5 space-x-2">
+    <input type="text" name="search" id="search" class="input input-sm input-bordered w-full" value="{{search}}" onkeypress="handleKeyPress(event)" placeholder="검색어를 입력하세요." />
+    <button class="btn btn-sm" onclick="location.href=`/?search=${document.getElementById('search').value}`">검색</button>
+    <a href="/write" class="btn btn-sm btn-primary">글쓰기</a>
+  </div>
+
+  <!-- 게시글 목록 테이블 -->
+  <div class="mb-5">
+    <table class="table w-full">
+      <thead>
+        <tr>
+          <th width="50%">제목</th>
+          <th>작성자</th>
+          <th>조회수</th>
+          <th>등록일</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 게시글 목록을 반복 출력 -->
+        {{#each posts}}
+          <tr>
+            <td><a href="/detail/{{_id}}">{{title}}</a></td>
+            <td>{{writer}}</td>
+            <td>{{hits}}</td>
+            <td>{{dateString createdDt}}</td>
+          </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 페이지네이션 영역 -->
+  <div class="flex justify-center">
+    <div class="btn-group">
+      {{#with paginator}}
+        <!-- 첫 페이지로 이동 버튼 -->
+        <a class="btn btn-sm btn-outline" href="/?page=1&search={{@root.search}}">&lt;&lt;</a>       
+        <!-- 이전 페이지 버튼 -->
+        {{#if hasPrev}}
+          <a class="btn btn-sm btn-outline" href="/?page={{prevPage}}&search={{@root.search}}">&lt;</a>          
+        {{else}}
+          <a class="btn btn-sm btn-disabled">&lt;</a>
+        {{/if}}
+        <!-- 페이지 목록 버튼 -->
+        {{#each pageList}}
+          {{#if (eq . @root.paginator.page)}}
+            <a class="btn btn-sm btn-outline btn-active">{{.}}</a>
+          {{else}}
+            <a class="btn btn-sm btn-outline" href="/?page={{.}}&search={{@root.search}}">{{.}}</a>
+          {{/if}}
+        {{/each}}
+        <!-- 다음 페이지 버튼 -->
+        {{#if hasNext}}
+          <a class="btn btn-sm btn-outline" href="/?page={{nextPage}}&search={{@root.search}}">&gt;</a>          
+        {{else}}
+          <a class="btn btn-sm btn-disabled">&gt;</a>
+        {{/if}}
+        <!-- 마지막 페이지로 이동 버튼 -->
+        <a class="btn btn-sm btn-outline" href="/?page={{lastPage}}&search={{@root.search}}">&gt;&gt;</a>
+      {{/with}}
+    </div>
+  </div>
+</div>
+
+<!-- 검색 엔터키 처리 스크립트 -->
+<script>
+function handleKeyPress(e) {
+  if (e.keyCode === 13) {
+      search();
+  }
+}
+function search() {
+  const searchValue = document.getElementById('search').value;
+  location.href = `/?search=${searchValue}`;
+}
+</script>
