@@ -6,7 +6,7 @@ const bcrypt = require('bcrypt');
    게시글 작성 함수
 =================== */
 async function writePost(collection, post, files) {
-    const encryptedPassword = bcrypt.hashSync(post.password, 10); // 비밀번호 암호화
+    const encryptedPassword = hashPassword(post.password); // 비밀번호 암호화
     post.hits = 0; // 조회수
     post.createdDt = new Date().toISOString(); // 생성 날짜
     post.files = files.map(file => file.filename); // 파일 리스트
@@ -64,7 +64,7 @@ async function getPostByIdAndPassword(collection, { id, password }) {
     );
     if (!post) return null;
     // 암호화된 비밀번호 확인
-    const isPasswordMatch = await bcrypt.compare(password, post.password);
+    const isPasswordMatch = comparePassword(password, post.password);
     if (!isPasswordMatch) return null;
     return post;
 }
@@ -83,39 +83,50 @@ async function getPostById(collection, id) {
    게시글 수정 함수
 =================== */
 async function updatePost(collection, id, post) {
-    // post.comments.map((comment, idx) => { console.log("1", idx+1, comment.password) });
     
     // 비밀번호가 평문으로 제공되는 경우 암호화
     if (post.password && !post.password.startsWith('$2b$')) {
-        post.password = bcrypt.hashSync(post.password, 10);
+        post.password = hashPassword(post.password);
     }
-    
     // 댓글의 비밀번호가 평문으로 제공되는 경우 암호화
-    if (post.comments) {
-        post.comments = post.comments.map(comment => {
-            if (comment.password && !comment.password.startsWith('$2b$')) {
-                comment.password = bcrypt.hashSync(comment.password, 10);
-            }
-            return comment;
-        });
-    }
+    // if (post.comments) {
+    //     post.comments = post.comments.map(comment => {
+    //         if (comment.password && !comment.password.startsWith('$2b$')) {
+    //             comment.password = hashPassword(comment.password);
+    //         }
+    //         return comment;
+    //     });
+    // }
+
     const toUpdatePost = { $set: post };
-  
-    return post = await collection.updateOne(
+    post = await collection.updateOne(
         { _id: ObjectId.createFromHexString(id) }, 
         toUpdatePost
-    );  
-    
+    );
+
     // 응답에서 비밀번호 제거
-    // post.password = undefined;
-    // if (post.comments) {
-    //     post.comments = post.comments.map(comment => ({
-    //         ...comment, password: undefined
-    //     }));
-    // }
+    post.password = undefined; 
+    if (post.comments) {
+        post.comments = post.comments.map(comment => ({
+            ...comment, password: undefined
+        }));
+    }
+    return post;
+}
+
+/* ================================================
+  비밀번호를 암호화(hashing)하는 함수
+  입력한 비밀번호와 부호화된 비밀번호를 비교하는 함수
+================================================= */
+function hashPassword(password) {
+    return bcrypt.hashSync(password, 10);
+}
+function comparePassword(plainPassword, hashedPassword) {
+    return bcrypt.compareSync(plainPassword, hashedPassword);
 }
 
 module.exports = {
     writePost, list, getDetailPost, 
-    getPostByIdAndPassword, getPostById, updatePost
+    getPostByIdAndPassword, getPostById, updatePost,
+    hashPassword, comparePassword
 }

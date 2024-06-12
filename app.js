@@ -3,10 +3,10 @@ const handlebars = require("express-handlebars");
 const { ObjectId } = require("mongodb");
 const session = require('express-session');
 const multer = require('multer');
-const bcrypt = require('bcrypt');
 const mongodbConnection = require("./configs/mongodb-connection");
 const postService = require("./services/post-service");
 let collection; // MongoDB 컬렉션 초기화
+let collection_comment;
 
 const app = express();
 app.use(express.json());
@@ -126,17 +126,20 @@ app.delete("/delete", async(req, res) => {
         }
         
         // 비밀번호 확인
-        const isPasswordMatch = await bcrypt.compare(password, post.password);
-        if (!isPasswordMatch) {
+        const isPasswordMatch = postService.comparePassword(password, post.password)
+       if (!isPasswordMatch) {
             return res.status(401).json({ isSuccess: false, message: "비밀번호가 일치하지 않습니다." });
-        }
+        } 
 
+        // 게시글 삭제
         const result = await collection.deleteOne({ _id: ObjectId.createFromHexString(id) });
         if (result.deletedCount !== 1) {
-            // 삭제된 게시글이 없는 경우
             console.log("삭제 실패");
             return res.json({ isSuccess: false, message: "삭제된 게시글이 없습니다." });
         }
+        // 해당 게시글의 댓글 모두 삭제
+        await collection_comment.deleteMany({ postId: ObjectId.createFromHexString(id) });
+
         return res.json({ isSuccess: true });
     } catch(error) {
         console.error(error);
@@ -145,10 +148,14 @@ app.delete("/delete", async(req, res) => {
 });
 
 
+
 // 글 상세 페이지 라우트
 app.get("/detail/:id", async (req, res) => {
-    const result = await postService.getDetailPost(collection, req.params.id);
-    res.render("detail", { title: boardTitle, post: result });
+    const postId = ObjectId.createFromHexString(req.params.id);
+    const post = await postService.getDetailPost(collection, req.params.id);
+    const comments = await collection_comment.find({ postId }).toArray(); // 관련 댓글 조회
+    post.comments = comments;
+    res.render("detail", { title: boardTitle, post });
 });
 
 // 비밀번호 확인 라우트
@@ -164,51 +171,53 @@ app.post("/check-password", async (req, res) => {
 });
 
 // 댓글 작성 라우트
-app.post("/write-comment", async(req, res) => {
+app.post("/write-comment", async (req, res) => {
     const { id, name, password, comment } = req.body;
-    const post = await postService.getPostById(collection, id);
-  const newComment = {
-        idx: (post.comments ? post.comments.length : 0) + 1, 
+    const hashedPassword = postService.hashPassword(password); // 비밀번호 암호화
+    
+    const newComment = {
+        postId: ObjectId.createFromHexString(id), // 게시글 ID
         name, 
-        password, 
+        password: hashedPassword,
         comment, 
         createdDt: new Date().toISOString()
     };
+    await collection_comment.insertOne(newComment);
 
-    if (post.comments) {
-        post.comments.push(newComment);
-    } else {
-        post.comments = [newComment];
-    }
-    await postService.updatePost(collection, id, post);
+    await collection.updateOne( // 게시물의 댓글 수 + 1
+        { _id: ObjectId.createFromHexString(id) },
+        { $inc: { commentCount: 1 } }
+    );
+
     return res.redirect(`/detail/${id}`);
 });
 
 // 댓글 삭제 라우트
 app.delete("/delete-comment", async (req, res) => {
-    const { id, idx, password } = req.body;
-    let hashedPassword;
-    const post = await collection.findOne(
-      {
-        _id: ObjectId.createFromHexString(id),
-        comments: { $elemMatch: { idx: parseInt(idx) } },
-      },
-      postService.projectionOption
-    );
-    if (!post) {
-      return res.json({ isSuccess: false });
-    }
-    post.comments.map((comment) =>  {
-        if(comment.idx == idx) {
-            hashedPassword = comment.password;
-        }
+    const { id, commentId, password } = req.body;
+    const comment = await collection_comment.findOne({ 
+        postId: ObjectId.createFromHexString(id),
+        _id: ObjectId.createFromHexString(commentId)
     });
-    const isPasswordMatch = await bcrypt.compare(password, hashedPassword);
+    if (!comment) {
+        return res.json({ isSuccess: false });
+    }
+    const isPasswordMatch = postService.comparePassword(password, comment.password);
     if (!isPasswordMatch) {
         return res.json({ isSuccess: false });
     }
-    post.comments = post.comments.filter((comment) => comment.idx != idx);
-    postService.updatePost(collection, id, post);
+
+    await collection_comment.deleteOne({
+        postId: ObjectId.createFromHexString(id),
+        _id: ObjectId.createFromHexString(commentId)
+    });
+
+    // 게시물의 댓글 수 - 1
+    await collection.updateOne(
+        { _id: ObjectId.createFromHexString(id) },
+        { $inc: { commentCount: -1 } }
+    );
+
     return res.json({ isSuccess: true });
 });
   
@@ -216,6 +225,7 @@ app.delete("/delete-comment", async (req, res) => {
 app.listen(3000, async() => {
     console.log("Server started.");
     const mongoClient = await mongodbConnection();
-    collection = mongoClient.db().collection("post"); // 컬렉션(테이블) 지정
+    collection = mongoClient.db().collection("post"); // 컬렉션(게시물 테이블) 지정
+    collection_comment = mongoClient.db().collection("postComment"); // 컬렉션(댓글 테이블) 지정
     console.log("MongoDB connected.");
 });

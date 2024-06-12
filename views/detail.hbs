@@ -74,7 +74,7 @@
         <div class="flex">
           <div class="flex-auto">작성자 : <b>{{name}}</b></div>
           <div class="flex-row-reverse">작성일시 : {{dateString createdDt}}
-            <button class="btn btn-xs btn-warning" onclick="deleteComment('{{idx}}')">삭제</button>
+            <button class="btn btn-xs btn-warning" onclick="deleteComment('{{_id}}')">삭제</button>
           </div>
         </div>
       </div>
@@ -140,12 +140,13 @@ async function deletePost() {
 }
 
 // 비밀번호 확인 후 댓글 삭제 메서드
-async function deleteComment(idx) {
+async function deleteComment(commentId) {
+  console.log("_id ", commentId);
   const password = prompt("삭제하시려면 패스워드를 입력해주세요");
   if (!password) { return; }
   const result = await fetch("/delete-comment", {
     ...deleteOption,
-    body: JSON.stringify({ id: "{{post._id}}", idx, password }) 
+    body: JSON.stringify({ id: "{{post._id}}", commentId, password }) 
   });
   const data = await result.json();
   if (!data.isSuccess) {
